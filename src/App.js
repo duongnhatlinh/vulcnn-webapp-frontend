@@ -10,6 +10,7 @@ import ProjectDetailPage from "./pages/ProjectDetailPage";
 import ScanPage from "./pages/ScanPage";
 import ResultsPage from "./pages/ResultsPage";
 import DocumentationPage from "./pages/DocumentationPage";
+import CreateProjectPage from "./pages/CreateProjectPage";
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/documentation" element={<DocumentationPage />} />
           <Route path="/projects" element={<ProjectListPage />} />
+          <Route path="/projects/create" element={<CreateProjectPage />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/scan" element={<ScanPage />} />
           <Route path="/results/:id" element={<ResultsPage />} />

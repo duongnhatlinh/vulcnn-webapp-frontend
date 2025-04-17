@@ -8,7 +8,7 @@ import { useProject } from "../hooks/useProject";
 
 const CreateProjectPage = () => {
   const navigate = useNavigate();
-  const { createProject, loading, error } = useProject();
+  const { createProject, loading } = useProject();
   const [formData, setFormData] = useState({
     name: "",
     description: "",
