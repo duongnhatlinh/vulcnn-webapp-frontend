@@ -1,8 +1,22 @@
-import React from "react";
+import React, {useState, useEffect} from "react";
 import { Link } from "react-router-dom";
 import MainLayout from "../components/layout/MainLayout";
+import { useAuth } from "../hooks/useAuth";
+
 
 const Dashboard = () => {
+  // Check if user is authenticated
+  const { user } = useAuth();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
+    }
+  }, [user]);
+
   // Sample project data
   const projects = [
     {
@@ -69,7 +83,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <MainLayout isAuthenticated={true}>
+    <MainLayout isAuthenticated={isAuthenticated}>
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           {/* Left column - Statistics */}

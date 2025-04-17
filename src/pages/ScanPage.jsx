@@ -9,6 +9,7 @@ import Card from "../components/common/Card";
 import Alert from "../components/common/Alert";
 import { useScan } from "../hooks/useScan";
 import { useProject } from "../hooks/useProject";
+import { useAuth } from "../hooks/useAuth";
 
 const ScanPage = () => {
   const location = useLocation();
@@ -30,6 +31,18 @@ const ScanPage = () => {
     loading: projectLoading,
     error: projectError,
   } = useProject();
+
+  // Check if user is authenticated
+  const { user } = useAuth();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
+    }
+  }, [user]);
 
   // Parse projectId from URL query params
   useEffect(() => {
@@ -128,7 +141,7 @@ const ScanPage = () => {
   }, [scanError, projectError]);
 
   return (
-    <MainLayout isAuthenticated={true}>
+    <MainLayout isAuthenticated={isAuthenticated}>
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {alert && (
           <div className="mb-6">

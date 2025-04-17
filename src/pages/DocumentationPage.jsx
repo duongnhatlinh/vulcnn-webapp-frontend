@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import MainLayout from "../components/layout/MainLayout";
 import Card from "../components/common/Card";
+import { useAuth } from "../hooks/useAuth";
+
 
 const DocumentationPage = () => {
   const [activeSection, setActiveSection] = useState("introduction");
@@ -14,8 +16,20 @@ const DocumentationPage = () => {
     { id: "api-docs", title: "API Documentation" },
   ];
 
+  // Check if user is authenticated
+  const { user } = useAuth();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
+    }
+  }, [user]);
+
   return (
-    <MainLayout isAuthenticated={true}>
+    <MainLayout isAuthenticated={isAuthenticated}>
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 sm:px-0">
           <h1 className="text-3xl font-bold text-gray-900">Documentation</h1>
