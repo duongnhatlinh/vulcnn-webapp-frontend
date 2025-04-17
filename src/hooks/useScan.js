@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import * as scanAPI from "../api/scans";
+import * as reportAPI from "../api/reports";
 
 export const useScan = () => {
   const [scan, setScan] = useState(null);
@@ -9,7 +10,7 @@ export const useScan = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchScan = async (id) => {
+  const fetchScan = useCallback(async (id) => {
     try {
       setLoading(true);
       setError(null);
@@ -17,14 +18,15 @@ export const useScan = () => {
       setScan(data);
       return data;
     } catch (err) {
-      setError(err.message || "Failed to fetch scan");
-      throw err;
+      const errorMessage = err.message || "Failed to fetch scan";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchAllScans = async () => {
+  const fetchAllScans = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -32,52 +34,66 @@ export const useScan = () => {
       setScans(data);
       return data;
     } catch (err) {
-      setError(err.message || "Failed to fetch scans");
-      throw err;
+      const errorMessage = err.message || "Failed to fetch scans";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const createScan = async (scanData) => {
+  const createScan = useCallback(async (scanData) => {
     try {
       setLoading(true);
       setError(null);
       const data = await scanAPI.createScan(scanData);
-      setScans([data, ...scans]);
-      setScan(data);
-      return data;
-    } catch (err) {
-      setError(err.message || "Failed to create scan");
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const cancelScan = async (id) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await scanAPI.cancelScan(id);
-
-      if (scan && scan.id === id) {
-        setScan({ ...scan, status: "cancelled" });
+      // Backend trả về { message, scan, files }
+      if (data && data.scan) {
+        setScans((prevScans) => [data.scan, ...prevScans]);
+        setScan(data.scan);
       }
 
-      setScans(
-        scans.map((s) => (s.id === id ? { ...s, status: "cancelled" } : s))
-      );
       return data;
     } catch (err) {
-      setError(err.message || "Failed to cancel scan");
-      throw err;
+      const errorMessage = err.message || "Failed to create scan";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const getScanResults = async (id) => {
+  const cancelScan = useCallback(
+    async (id) => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await scanAPI.cancelScan(id);
+
+        if (scan && scan.id === id) {
+          setScan((prevScan) => ({ ...prevScan, status: "cancelled" }));
+        }
+
+        setScans((prevScans) =>
+          prevScans.map((s) =>
+            s.id === id ? { ...s, status: "cancelled" } : s
+          )
+        );
+
+        return data;
+      } catch (err) {
+        const errorMessage = err.message || "Failed to cancel scan";
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [scan]
+  );
+
+  const getScanResults = useCallback(async (id) => {
     try {
       setLoading(true);
       setError(null);
@@ -85,14 +101,15 @@ export const useScan = () => {
       setResults(data);
       return data;
     } catch (err) {
-      setError(err.message || "Failed to fetch scan results");
-      throw err;
+      const errorMessage = err.message || "Failed to fetch scan results";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const getScanPDG = async (scanId, fileId) => {
+  const getScanPDG = useCallback(async (scanId, fileId) => {
     try {
       setLoading(true);
       setError(null);
@@ -100,37 +117,41 @@ export const useScan = () => {
       setPdg(data);
       return data;
     } catch (err) {
-      setError(err.message || "Failed to fetch PDG");
-      throw err;
+      const errorMessage = err.message || "Failed to fetch PDG";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const generateScanReport = async (id, format) => {
+  const generateScanReport = useCallback(async (id, format = "pdf") => {
     try {
       setLoading(true);
       setError(null);
-      const blob = await scanAPI.generateScanReport(id, format);
 
-      // Create download link for the report
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = url;
-      a.download = `scan-report-${id}.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
+      // Gọi API để tạo report
+      const result = await scanAPI.generateScanReport(id, format);
 
-      return true;
+      if (format === "json") {
+        // Nếu là JSON, trả về dữ liệu
+        return result;
+      } else {
+        // Nếu là định dạng khác, tải file
+        // Dùng reportId từ kết quả để tải
+        if (result && result.reportId) {
+          await reportAPI.downloadReport(result.reportId, format);
+        }
+        return true;
+      }
     } catch (err) {
-      setError(err.message || "Failed to generate report");
-      throw err;
+      const errorMessage = err.message || "Failed to generate report";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   return {
     scan,

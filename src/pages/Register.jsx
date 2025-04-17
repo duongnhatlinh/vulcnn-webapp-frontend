@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MainLayout from "../components/layout/MainLayout";
+import Alert from "../components/common/Alert";
+import { useAuth } from "../hooks/useAuth";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -9,39 +11,48 @@ const Register = () => {
     password: "",
     confirmPassword: "",
   });
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
+  const [submitError, setSubmitError] = useState(null);
   const navigate = useNavigate();
+  const { register, loading } = useAuth();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+
+    // Clear error when user types
+    if (formErrors[e.target.name]) {
+      setFormErrors({
+        ...formErrors,
+        [e.target.name]: "",
+      });
+    }
   };
 
   const validate = () => {
-    const newErrors = {};
+    const errors = {};
 
     if (!formData.name) {
-      newErrors.name = "Name is required";
+      errors.name = "Name is required";
     }
 
     if (!formData.email) {
-      newErrors.email = "Email is required";
+      errors.email = "Email is required";
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Email address is invalid";
+      errors.email = "Email address is invalid";
     }
 
     if (!formData.password) {
-      newErrors.password = "Password is required";
+      errors.password = "Password is required";
     } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+      errors.password = "Password must be at least 6 characters";
     }
 
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
+      errors.confirmPassword = "Passwords do not match";
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e) => {
@@ -49,15 +60,19 @@ const Register = () => {
 
     if (!validate()) return;
 
-    setIsLoading(true);
+    try {
+      // Call register API
+      await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
 
-    // Mock API call
-    setTimeout(() => {
-      // Simulate successful registration
-      localStorage.setItem("token", "mock_token");
-      setIsLoading(false);
+      // Redirect to dashboard after successful registration
       navigate("/dashboard");
-    }, 1000);
+    } catch (error) {
+      setSubmitError(error.message || "Registration failed. Please try again.");
+    }
   };
 
   return (
@@ -93,6 +108,15 @@ const Register = () => {
               </Link>
             </p>
           </div>
+
+          {submitError && (
+            <Alert
+              type="error"
+              message={submitError}
+              onClose={() => setSubmitError(null)}
+            />
+          )}
+
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <div className="rounded-md shadow-sm -space-y-px">
               <div>
@@ -106,14 +130,14 @@ const Register = () => {
                   autoComplete="name"
                   required
                   className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                    errors.name ? "border-red-300" : "border-gray-300"
+                    formErrors.name ? "border-red-300" : "border-gray-300"
                   } placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                   placeholder="Full Name"
                   value={formData.name}
                   onChange={handleChange}
                 />
-                {errors.name && (
-                  <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+                {formErrors.name && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>
                 )}
               </div>
               <div>
@@ -127,14 +151,16 @@ const Register = () => {
                   autoComplete="email"
                   required
                   className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                    errors.email ? "border-red-300" : "border-gray-300"
+                    formErrors.email ? "border-red-300" : "border-gray-300"
                   } placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                   placeholder="Email address"
                   value={formData.email}
                   onChange={handleChange}
                 />
-                {errors.email && (
-                  <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                {formErrors.email && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {formErrors.email}
+                  </p>
                 )}
               </div>
               <div>
@@ -148,14 +174,16 @@ const Register = () => {
                   autoComplete="new-password"
                   required
                   className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                    errors.password ? "border-red-300" : "border-gray-300"
+                    formErrors.password ? "border-red-300" : "border-gray-300"
                   } placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                   placeholder="Password"
                   value={formData.password}
                   onChange={handleChange}
                 />
-                {errors.password && (
-                  <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+                {formErrors.password && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {formErrors.password}
+                  </p>
                 )}
               </div>
               <div>
@@ -169,7 +197,7 @@ const Register = () => {
                   autoComplete="new-password"
                   required
                   className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                    errors.confirmPassword
+                    formErrors.confirmPassword
                       ? "border-red-300"
                       : "border-gray-300"
                   } placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
@@ -177,9 +205,9 @@ const Register = () => {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                 />
-                {errors.confirmPassword && (
+                {formErrors.confirmPassword && (
                   <p className="text-red-500 text-xs mt-1">
-                    {errors.confirmPassword}
+                    {formErrors.confirmPassword}
                   </p>
                 )}
               </div>
@@ -188,10 +216,10 @@ const Register = () => {
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={loading}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
-                {isLoading ? (
+                {loading ? (
                   <svg
                     className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
                     fill="none"

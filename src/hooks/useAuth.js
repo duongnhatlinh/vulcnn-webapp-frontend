@@ -3,8 +3,8 @@ import { AuthContext } from "../context/AuthContext";
 import * as authAPI from "../api/auth";
 
 export const useAuth = () => {
-  const { user, setUser, loading } = useContext(AuthContext);
-  const [authError, setAuthError] = useState(null);
+  const { user, setUser, loading, error, setError, clearUser } =
+    useContext(AuthContext);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
@@ -17,61 +17,79 @@ export const useAuth = () => {
 
   const login = async (credentials) => {
     try {
-      setAuthError(null);
+      setError(null);
       const userData = await authAPI.login(credentials);
       setUser(userData.user);
       return userData;
     } catch (error) {
-      setAuthError(error.message || "Failed to login");
-      throw error;
+      const errorMessage = error.message || "Failed to login";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
   const register = async (userData) => {
     try {
-      setAuthError(null);
+      setError(null);
       const result = await authAPI.register(userData);
       setUser(result.user);
       return result;
     } catch (error) {
-      setAuthError(error.message || "Failed to register");
-      throw error;
+      const errorMessage = error.message || "Failed to register";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
   const logout = () => {
     authAPI.logout();
-    setUser(null);
+    clearUser();
+  };
+
+  const refreshUserToken = async () => {
+    try {
+      setError(null);
+      return await authAPI.refreshToken();
+    } catch (error) {
+      clearUser();
+      const errorMessage =
+        error.message || "Session expired. Please login again.";
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
   };
 
   const forgotPassword = async (email) => {
     try {
-      setAuthError(null);
+      setError(null);
       return await authAPI.forgotPassword(email);
     } catch (error) {
-      setAuthError(error.message || "Failed to send reset email");
-      throw error;
+      const errorMessage = error.message || "Failed to send reset email";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
   const resetPassword = async (resetData) => {
     try {
-      setAuthError(null);
+      setError(null);
       return await authAPI.resetPassword(resetData);
     } catch (error) {
-      setAuthError(error.message || "Failed to reset password");
-      throw error;
+      const errorMessage = error.message || "Failed to reset password";
+      setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
   return {
     user,
     loading,
-    authError,
+    error,
     isAuthenticated,
     login,
     register,
     logout,
+    refreshUserToken,
     forgotPassword,
     resetPassword,
   };

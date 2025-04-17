@@ -1,62 +1,255 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import MainLayout from "../components/layout/MainLayout";
+import VulnerabilitySummary from "../components/results/VulnerabilitySummary";
+import VulnerabilityDetail from "../components/results/VulnerabilityDetail";
+import CodeDisplay from "../components/common/CodeDisplay";
+import PDGVisualization from "../components/pdg/PDGVisualization";
+import Alert from "../components/common/Alert";
+import Button from "../components/common/Button";
+import { useScan } from "../hooks/useScan";
+import Card from "../components/common/Card";
+import api from "../api/api";
 
 const ResultsPage = () => {
+  const { id } = useParams();
   const [activeTab, setActiveTab] = useState("results");
+  const [selectedVulnerability, setSelectedVulnerability] = useState(null);
+  const [selectedFileId, setSelectedFileId] = useState(null);
+  const [fileContent, setFileContent] = useState("");
+  const {
+    fetchScan,
+    getScanResults,
+    getScanPDG,
+    generateScanReport,
+    loading,
+    error,
+  } = useScan();
+  const [scan, setScan] = useState(null);
+  const [scanResults, setScanResults] = useState(null);
+  const [pdgData, setPdgData] = useState(null);
+  const [alert, setAlert] = useState(null);
 
-  // Sample results data
-  const vulnerabilities = [
-    {
-      id: 1,
-      function: "main",
-      line: 15,
-      severity: "high",
-      type: "Buffer Overflow",
-      description: "Potential buffer overflow in strcpy operation",
-      code: "strcpy(buffer, input);",
-      cwe: "CWE-119",
-    },
-    {
-      id: 2,
-      function: "parse_options",
-      line: 32,
-      severity: "medium",
-      type: "Unvalidated Input",
-      description: "User input is not properly validated before use",
-      code: "system(command);",
-      cwe: "CWE-20",
-    },
-    {
-      id: 3,
-      function: "image_generation",
-      line: 78,
-      severity: "low",
-      type: "Resource Leak",
-      description: "File handle not properly closed",
-      code: 'FILE* f = fopen(filename, "r");',
-      cwe: "CWE-772",
-    },
-  ];
+  // Fetch scan data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get basic scan info
+        const scanData = await fetchScan(id);
+        setScan(scanData);
 
-  // Sample code with highlighted vulnerability
-  const sampleCode = `#include <stdio.h>
-#include <string.h>
+        // Get scan results
+        const results = await getScanResults(id);
+        setScanResults(results);
 
-int main(int argc, char **argv) {
-    char buffer[10];
-    char *input = argv[1];
-    
-    // This is vulnerable to buffer overflow
-    strcpy(buffer, input);
-    
-    printf("Input: %s\\n", buffer);
-    return 0;
-}`;
+        // Select first file by default if available
+        if (results && results.results && results.results.length > 0) {
+          setSelectedFileId(results.results[0].file.id);
+        }
+      } catch (err) {
+        console.error("Failed to fetch scan data:", err);
+        setAlert({
+          type: "error",
+          message: `Failed to load scan results: ${
+            err.message || "Unknown error"
+          }`,
+        });
+      }
+    };
+
+    fetchData();
+  }, [id, fetchScan, getScanResults]);
+
+  // Fetch file content when selectedFileId changes
+  useEffect(() => {
+    const fetchFileContent = async () => {
+      if (!selectedFileId) return;
+
+      try {
+        const response = await api.get(
+          `/projects/${scan?.project_id}/files/${selectedFileId}/content`
+        );
+        setFileContent(response.data.content || "// No content available");
+      } catch (err) {
+        console.error("Failed to fetch file content:", err);
+        setFileContent("// Failed to load file content");
+      }
+    };
+
+    if (scan && selectedFileId) {
+      fetchFileContent();
+    }
+  }, [selectedFileId, scan]);
+
+  // Fetch PDG when tab changes to pdg and a file is selected
+  useEffect(() => {
+    const fetchPDG = async () => {
+      if (activeTab === "pdg" && selectedFileId && scan) {
+        try {
+          const pdg = await getScanPDG(id, selectedFileId);
+          setPdgData(pdg);
+        } catch (err) {
+          console.error("Failed to fetch PDG:", err);
+          setAlert({
+            type: "error",
+            message: `Failed to load PDG: ${err.message || "Unknown error"}`,
+          });
+        }
+      }
+    };
+
+    fetchPDG();
+  }, [activeTab, selectedFileId, id, scan, getScanPDG]);
+
+  // Helper function to find vulnerabilities for selected file
+  const getVulnerabilitiesForFile = () => {
+    if (!scanResults || !scanResults.results) return [];
+
+    const fileResult = scanResults.results.find(
+      (r) => r.file.id === selectedFileId
+    );
+    return fileResult ? fileResult.vulnerabilities || [] : [];
+  };
+
+  // Helper function to get all vulnerabilities
+  const getAllVulnerabilities = () => {
+    if (!scanResults || !scanResults.results) return [];
+
+    return scanResults.results.flatMap(
+      (result) => result.vulnerabilities || []
+    );
+  };
+
+  // Handle report generation
+  const handleGenerateReport = async (format) => {
+    try {
+      setAlert({
+        type: "info",
+        message: "Generating report, please wait...",
+      });
+
+      await generateScanReport(id, format);
+
+      setAlert({
+        type: "success",
+        message: `Report in ${format.toUpperCase()} format has been generated successfully`,
+      });
+    } catch (err) {
+      setAlert({
+        type: "error",
+        message: `Failed to generate report: ${err.message || "Unknown error"}`,
+      });
+    }
+  };
+
+  if (loading && !scan) {
+    return (
+      <MainLayout isAuthenticated={true}>
+        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <div className="flex justify-center items-center py-10">
+            <svg
+              className="animate-spin h-10 w-10 text-blue-500"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (error && !scan) {
+    return (
+      <MainLayout isAuthenticated={true}>
+        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <Alert type="error" title="Error loading scan" message={error} />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout isAuthenticated={true}>
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Results Section */}
+        {alert && (
+          <div className="mb-4">
+            <Alert
+              type={alert.type}
+              message={alert.message}
+              onClose={() => setAlert(null)}
+            />
+          </div>
+        )}
+
+        {/* Scan Info */}
+        {scan && (
+          <Card className="mb-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">
+                  Scan Results: {scan.id}
+                </h1>
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">Status:</span>{" "}
+                    <span
+                      className={`${
+                        scan.status === "completed"
+                          ? "text-green-600"
+                          : scan.status === "failed"
+                          ? "text-red-600"
+                          : "text-blue-600"
+                      }`}
+                    >
+                      {scan.status.charAt(0).toUpperCase() +
+                        scan.status.slice(1)}
+                    </span>
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">Started:</span>{" "}
+                    {new Date(scan.started_at).toLocaleString()}
+                  </p>
+                  {scan.completed_at && (
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Completed:</span>{" "}
+                      {new Date(scan.completed_at).toLocaleString()}
+                    </p>
+                  )}
+                  {scan.project_id && (
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Project ID:</span>{" "}
+                      {scan.project_id}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <Button
+                onClick={() => handleGenerateReport("pdf")}
+                variant="secondary"
+                size="sm"
+              >
+                Download Report
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* Results Tabs */}
         <div className="bg-white shadow rounded-lg">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex">
@@ -96,116 +289,15 @@ int main(int argc, char **argv) {
           <div className="p-6">
             {activeTab === "results" && (
               <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Vulnerability Scan Results
-                  </h3>
-                  <div className="flex space-x-2">
-                    <button className="px-3 py-1 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">
-                      Export PDF
-                    </button>
-                    <button className="px-3 py-1 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">
-                      Export CSV
-                    </button>
-                  </div>
-                </div>
+                <VulnerabilitySummary
+                  vulnerabilities={getAllVulnerabilities()}
+                  onVulnerabilitySelect={setSelectedVulnerability}
+                  onGenerateReport={handleGenerateReport}
+                />
 
-                <div className="flex space-x-4 mb-6">
-                  <div className="bg-red-100 p-4 rounded-lg flex-1">
-                    <div className="text-2xl font-bold text-red-700">1</div>
-                    <div className="text-sm text-red-700">High Severity</div>
-                  </div>
-                  <div className="bg-yellow-100 p-4 rounded-lg flex-1">
-                    <div className="text-2xl font-bold text-yellow-700">1</div>
-                    <div className="text-sm text-yellow-700">
-                      Medium Severity
-                    </div>
-                  </div>
-                  <div className="bg-blue-100 p-4 rounded-lg flex-1">
-                    <div className="text-2xl font-bold text-blue-700">1</div>
-                    <div className="text-sm text-blue-700">Low Severity</div>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Severity
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Type
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Function
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Line
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Description
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          CWE
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {vulnerabilities.map((vuln) => (
-                        <tr key={vuln.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                              ${
-                                vuln.severity === "high"
-                                  ? "bg-red-100 text-red-800"
-                                  : vuln.severity === "medium"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-blue-100 text-blue-800"
-                              }`}
-                            >
-                              {vuln.severity}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {vuln.type}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {vuln.function}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {vuln.line}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {vuln.description}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {vuln.cwe}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {selectedVulnerability && (
+                  <VulnerabilityDetail vulnerability={selectedVulnerability} />
+                )}
               </div>
             )}
 
@@ -214,68 +306,53 @@ int main(int argc, char **argv) {
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
                   Source Code View
                 </h3>
-                <div className="bg-gray-800 rounded-lg p-4 text-white font-mono text-sm overflow-x-auto">
-                  {sampleCode.split("\n").map((line, index) => (
-                    <div
-                      key={index}
-                      className={`${
-                        index === 7 ? "bg-red-900 bg-opacity-40" : ""
-                      }`}
-                    >
-                      <span className="inline-block w-8 text-gray-500">
-                        {index + 1}
-                      </span>
-                      {line}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg
-                        className="h-5 w-5 text-red-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+
+                {/* File selector */}
+                {scanResults &&
+                  scanResults.results &&
+                  scanResults.results.length > 0 && (
+                    <div className="mb-4">
+                      <label
+                        htmlFor="file-select"
+                        className="block text-sm font-medium text-gray-700 mb-1"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                      </svg>
+                        Select File
+                      </label>
+                      <select
+                        id="file-select"
+                        className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                        value={selectedFileId || ""}
+                        onChange={(e) => setSelectedFileId(e.target.value)}
+                      >
+                        {scanResults.results.map((result) => (
+                          <option key={result.file.id} value={result.file.id}>
+                            {result.file.filename}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-red-800">
-                        Buffer Overflow (CWE-119)
-                      </h3>
-                      <div className="mt-2 text-sm text-red-700">
-                        <p>
-                          The strcpy function at line 8 does not check if the
-                          source string fits in the destination buffer. This can
-                          lead to a buffer overflow if the input is larger than
-                          10 bytes.
-                        </p>
-                      </div>
-                      <div className="mt-2">
-                        <div className="text-sm font-medium text-red-800">
-                          Recommendation:
-                        </div>
-                        <p className="text-sm text-red-700 mt-1">
-                          Use strncpy or similar functions that allow specifying
-                          a maximum length, or ensure the input is validated
-                          before copying.
-                        </p>
-                        <div className="mt-2 bg-gray-800 p-2 rounded text-white font-mono text-xs">
-                          strncpy(buffer, input, sizeof(buffer) - 1);
-                          <br />
-                          buffer[sizeof(buffer) - 1] = '\0';
-                        </div>
-                      </div>
-                    </div>
+                  )}
+
+                {/* Code display */}
+                <CodeDisplay
+                  code={fileContent}
+                  language="c"
+                  highlightedLines={getVulnerabilitiesForFile().map(
+                    (v) => v.line_number
+                  )}
+                />
+
+                {/* Vulnerabilities for this file */}
+                {getVulnerabilitiesForFile().length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="text-md font-medium text-gray-900 mb-3">
+                      Vulnerabilities in this file
+                    </h4>
+                    {getVulnerabilitiesForFile().map((vuln) => (
+                      <VulnerabilityDetail key={vuln.id} vulnerability={vuln} />
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -284,158 +361,62 @@ int main(int argc, char **argv) {
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
                   Program Dependency Graph
                 </h3>
-                <div className="border border-gray-300 rounded-lg p-4 flex justify-center">
-                  <svg width="600" height="400" className="max-w-full">
-                    {/* Simulated PDG visualization */}
-                    <rect width="600" height="400" fill="#f9fafb" />
-                    <g transform="translate(300, 50)">
-                      {/* Nodes */}
+
+                {/* File selector for PDG */}
+                {scanResults &&
+                  scanResults.results &&
+                  scanResults.results.length > 0 && (
+                    <div className="mb-4">
+                      <label
+                        htmlFor="pdg-file-select"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Select File
+                      </label>
+                      <select
+                        id="pdg-file-select"
+                        className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                        value={selectedFileId || ""}
+                        onChange={(e) => setSelectedFileId(e.target.value)}
+                      >
+                        {scanResults.results.map((result) => (
+                          <option key={result.file.id} value={result.file.id}>
+                            {result.file.filename}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                {/* PDG visualization */}
+                {loading && !pdgData ? (
+                  <div className="flex justify-center items-center py-10">
+                    <svg
+                      className="animate-spin h-10 w-10 text-blue-500"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
                       <circle
-                        cx="0"
-                        cy="0"
-                        r="30"
-                        fill="#dbeafe"
-                        stroke="#3b82f6"
-                        strokeWidth="2"
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
                       />
-                      <text x="0" y="5" textAnchor="middle" fontSize="12">
-                        main()
-                      </text>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                  </div>
+                ) : (
+                  <PDGVisualization pdgData={pdgData} />
+                )}
 
-                      <circle
-                        cx="-150"
-                        cy="100"
-                        r="30"
-                        fill="#dbeafe"
-                        stroke="#3b82f6"
-                        strokeWidth="2"
-                      />
-                      <text x="-150" y="105" textAnchor="middle" fontSize="12">
-                        buffer
-                      </text>
-
-                      <circle
-                        cx="0"
-                        cy="100"
-                        r="30"
-                        fill="#dbeafe"
-                        stroke="#3b82f6"
-                        strokeWidth="2"
-                      />
-                      <text x="0" y="105" textAnchor="middle" fontSize="12">
-                        input
-                      </text>
-
-                      <circle
-                        cx="150"
-                        cy="100"
-                        r="30"
-                        fill="#fee2e2"
-                        stroke="#ef4444"
-                        strokeWidth="2"
-                      />
-                      <text x="150" y="105" textAnchor="middle" fontSize="12">
-                        strcpy
-                      </text>
-
-                      <circle
-                        cx="0"
-                        cy="200"
-                        r="30"
-                        fill="#dbeafe"
-                        stroke="#3b82f6"
-                        strokeWidth="2"
-                      />
-                      <text x="0" y="205" textAnchor="middle" fontSize="12">
-                        printf
-                      </text>
-
-                      <circle
-                        cx="0"
-                        cy="300"
-                        r="30"
-                        fill="#dbeafe"
-                        stroke="#3b82f6"
-                        strokeWidth="2"
-                      />
-                      <text x="0" y="305" textAnchor="middle" fontSize="12">
-                        return
-                      </text>
-
-                      {/* Edges */}
-                      <line
-                        x1="0"
-                        y1="30"
-                        x2="-150"
-                        y2="70"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                      />
-                      <line
-                        x1="0"
-                        y1="30"
-                        x2="0"
-                        y2="70"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                      />
-                      <line
-                        x1="0"
-                        y1="30"
-                        x2="150"
-                        y2="70"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                      />
-
-                      <line
-                        x1="-150"
-                        y1="130"
-                        x2="150"
-                        y2="70"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                      />
-                      <line
-                        x1="0"
-                        y1="130"
-                        x2="150"
-                        y2="70"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                      />
-
-                      <line
-                        x1="150"
-                        y1="130"
-                        x2="0"
-                        y2="170"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                      />
-                      <line
-                        x1="0"
-                        y1="130"
-                        x2="0"
-                        y2="170"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                      />
-
-                      <line
-                        x1="0"
-                        y1="230"
-                        x2="0"
-                        y2="270"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                      />
-                    </g>
-                    <text x="450" y="380" fontSize="10" fill="#6b7280">
-                      Highlighted in red: Vulnerable code block
-                    </text>
-                  </svg>
-                </div>
+                {/* PDG explanation */}
                 <div className="mt-4 bg-blue-50 border-l-4 border-blue-400 p-4">
                   <div className="flex">
                     <div className="flex-shrink-0">
@@ -460,9 +441,9 @@ int main(int argc, char **argv) {
                       <div className="mt-2 text-sm text-blue-700">
                         <p>
                           The Program Dependency Graph shows data flow between
-                          operations. The red node indicates the vulnerable
-                          operation where user input flows into a buffer without
-                          size checking.
+                          operations. Red nodes indicate potential vulnerable
+                          operations where user input may flow into unsafe
+                          operations.
                         </p>
                       </div>
                     </div>
