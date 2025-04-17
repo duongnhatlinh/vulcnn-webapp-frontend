@@ -1,11 +1,13 @@
 import { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 import * as authAPI from "../api/auth";
 
 export const useAuth = () => {
   const { user, setUser, loading, error, setError, clearUser } =
     useContext(AuthContext);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
@@ -19,7 +21,7 @@ export const useAuth = () => {
     try {
       setError(null);
       const userData = await authAPI.login(credentials);
-      setUser(userData.user);
+      setUser(userData.user || { email: credentials.email, ...userData });
       return userData;
     } catch (error) {
       const errorMessage = error.message || "Failed to login";
@@ -44,6 +46,7 @@ export const useAuth = () => {
   const logout = () => {
     authAPI.logout();
     clearUser();
+    navigate("/login");
   };
 
   const refreshUserToken = async () => {

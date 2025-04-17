@@ -1,8 +1,30 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
 
 const Header = ({ isAuthenticated = false }) => {
   const location = useLocation();
+  const { user, logout } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    setDropdownOpen(false);
+  };
 
   return (
     <nav className="bg-white shadow-md">
@@ -72,11 +94,14 @@ const Header = ({ isAuthenticated = false }) => {
           </div>
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
             {isAuthenticated ? (
-              <div className="flex items-center">
-                <span className="text-sm text-gray-700 mr-4">
-                  john.doe@example.com
+              <div className="flex items-center relative" ref={dropdownRef}>
+                <span className="text-sm text-gray-700 mr-2">
+                  {user?.email || "User"}
                 </span>
-                <button className="bg-gray-200 p-1 rounded-full text-gray-500 hover:text-gray-600">
+                <button
+                  className="bg-gray-200 p-1 rounded-full text-gray-500 hover:text-gray-600"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                >
                   <svg
                     className="h-6 w-6"
                     fill="none"
@@ -91,6 +116,25 @@ const Header = ({ isAuthenticated = false }) => {
                     />
                   </svg>
                 </button>
+
+                {/* Dropdown menu */}
+                {dropdownOpen && (
+                  <div className="absolute right-0 top-10 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                    <Link
+                      to="/profile"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setDropdownOpen(false)}
+                    >
+                      Profile
+                    </Link>
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={handleLogout}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <Link to="/login">
